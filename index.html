@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>fileTest</title>
+</head>
+
+<body>
+  <input type="file" id="fileDom">
+  <script src="http://cdn.bootcss.com/blueimp-md5/1.1.0/js/md5.min.js"></script>
+  <script src="./js/axios.js"></script>
+  <script>
+    let chunkNum = 5;
+    fileDom.onchange = async function handleFileChange() {
+      let file = fileDom.files[0];
+      if (!file) return;
+
+      let parseSize = file.size / chunkNum, currSize = 0, i = 0, chunkList = [];
+
+      console.log(file)
+
+      let { hash, suffix, filename } = _formMatFileNameToMd5(file.name);
+
+      while (i < 5) {
+        chunkList.push({
+          chunk: file.slice(currSize, currSize + parseSize),
+          filename: hash + '-' + i + '.' + suffix
+        })
+        currSize += parseSize
+        i++;
+      }
+
+      chunkList = chunkList.map((item, index) => {
+        let formData = new FormData();
+        formData.append('chunk', item.chunk)
+        formData.append('filename', item.filename)
+        return axios({
+          url: 'http://127.0.0.1:8081/chunk',
+          data: formData
+        }).then(result => {
+          console.log(`第${index}次请求`)
+          if (result.code === 0) {
+            return Promise.resolve(result);
+          }
+          return Promise.reject(result);
+        })
+      })
+      await Promise.all(chunkList);
+      console.log('可以合并了')
+
+      let result = await axios({
+        url: 'http://127.0.0.1:8081/merge',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        data: `filename=${filename}`
+      })
+      if (result.code === 0) {
+        console.log('合并成功：', result)
+      }
+    }
+  </script>
+</body>
+
+</html>
